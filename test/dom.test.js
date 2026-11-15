@@ -206,6 +206,34 @@ async function main() {
       'marker mentions the threshold');
     const more = window.document.querySelector('form.js-ajax-pagination');
     assert.ok(has(more, 'gff-hide'), '"More" button removed');
+
+    // Regression: the marker must sit at the BOTTOM of the feed, i.e.
+    // after every top-level card, not above the feed content.
+    const lastCard = cs[cs.length - 1];
+    assert.ok(
+      !!(lastCard.compareDocumentPosition(marker) &
+         window.Node.DOCUMENT_POSITION_FOLLOWING),
+      'marker is placed after the last feed card');
+
+    // Regression: even if the marker ends up at the top (e.g. created
+    // before the pagination form rendered), the next apply must move it
+    // back to the bottom instead of leaving it there.
+    const feed = window.document.querySelector(
+      'div[data-target="feed-container.content"]');
+    feed.insertBefore(marker, feed.firstChild); // force it to the top
+    const seg = window.document.querySelector(
+      '.gff-seg button[data-key="merged"][data-value="collapse"]');
+    seg.dispatchEvent(new window.Event('click', { bubbles: true }));
+    await sleep(120); // rAF-scheduled apply()
+    const marker2 = window.document.getElementById('gff-end-marker');
+    assert.ok(marker2, 'marker survives re-apply');
+    assert.ok(
+      !!(lastCard.compareDocumentPosition(marker2) &
+         window.Node.DOCUMENT_POSITION_FOLLOWING),
+      'marker is re-positioned to the bottom after re-apply');
+    assert.ok(marker2.nextElementSibling === more ||
+              marker2.parentElement === feed,
+      'marker anchors to the More form or the feed container end');
     window.close();
 
     // Same config but time filter OFF -> nothing time-hidden, More present.

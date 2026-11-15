@@ -2,7 +2,7 @@
 // @name         GitHub Feed Filter
 // @name:zh-CN   GitHub Feed 过滤器
 // @namespace    https://github.com/igugyj/github-feed-filter
-// @version      1.0.0
+// @version      1.0.1
 // @description  Filter, collapse or hide GitHub feed cards by type, age the feed with time cutoff and auto-load. Fully configurable.
 // @description:zh-CN  按类型屏蔽/折叠/隐藏 GitHub Feed 卡片，支持时间截断与自动加载，全部可配置。
 // @author       Pfolg
@@ -466,9 +466,38 @@
     }
   }
 
+  // Place the end marker at the bottom of the feed: right before the
+  // "More" form when it exists, otherwise as the last child of the feed
+  // content container. Re-checked on every apply because the marker may
+  // be created before the pagination form is rendered (it would then
+  // land at the top). Only moves the node when it is out of place, so
+  // the MutationObserver cannot loop.
+  function placeEndMarker(marker, moreForm, feedContent) {
+    let parent, next;
+    if (moreForm && moreForm.parentElement) {
+      parent = moreForm.parentElement;
+      next = moreForm;
+    } else if (feedContent) {
+      parent = feedContent;
+      next = null;
+    } else {
+      return;
+    }
+    if (marker.parentElement !== parent || marker.nextElementSibling !== next) {
+      parent.insertBefore(marker, next);
+    }
+  }
+
   function applyTimeFilterUI() {
     const tf = config.timeFilter;
-    const moreForm = document.querySelector('form.js-ajax-pagination');
+    const feedContent =
+      document.querySelector('div[data-target="feed-container.content"]');
+    // Scope the search to the feed: other ajax-pagination forms may exist
+    // elsewhere on the page (higher up), which used to anchor the marker
+    // near the top.
+    const moreForm = feedContent
+      ? feedContent.querySelector('form.js-ajax-pagination')
+      : null;
     let marker = document.getElementById(END_MARKER_ID);
 
     const active = tf.enabled && timeCutoffHit;
@@ -478,14 +507,11 @@
         marker = document.createElement('div');
         marker.id = END_MARKER_ID;
         marker.className = 'gff-end-marker';
-        const anchor = moreForm ||
-          document.querySelector('div[data-target="feed-container.content"]') ||
-          document.body;
-        anchor.parentElement.insertBefore(marker, anchor);
       }
       marker.textContent =
         'You’ve reached the end of the feed — items older than ' +
         tf.days + ' day' + (tf.days === 1 ? '' : 's') + ' are hidden.';
+      placeEndMarker(marker, moreForm, feedContent);
       if (moreForm) moreForm.classList.add('gff-hide');
     } else {
       if (marker) marker.remove();
@@ -553,7 +579,11 @@
   }
 
   function armAutoLoad() {
-    const btn = document.querySelector('form.js-ajax-pagination button');
+    const feedContent =
+      document.querySelector('div[data-target="feed-container.content"]');
+    const btn = feedContent
+      ? feedContent.querySelector('form.js-ajax-pagination button')
+      : null;
     if (!config.autoLoad.enabled || !btn || timeCutoffHit) {
       destroyAutoLoad();
       return;
