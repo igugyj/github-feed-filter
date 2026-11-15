@@ -1,0 +1,27 @@
+{
+  "name": "github-feed-filter",
+  "version": "1.0.0",
+  "description": "Tampermonkey userscript that filters, collapses or hides GitHub feed cards by type, with time cutoff and auto-load.",
+  "scripts": {
+    "test": "npm run test:classify && npm run test:dom",
+    "test:classify": "node test/classify.test.js",
+    "test:dom": "node test/dom.test.js",
+    "lint": "node --check github-feed-filter.user.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/igugyj/github-feed-filter.git"
+  },
+  "keywords": [
+    "tampermonkey",
+    "userscript",
+    "github",
+    "feed",
+    "filter"
+  ],
+  "author": "Pfolg",
+  "license": "MIT",
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}

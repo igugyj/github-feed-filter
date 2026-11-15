@@ -1,0 +1,6 @@
+# Local saved feed sample (contains personal data)
+example
+
+# Dependencies
+node_modules
+package-lock.json
