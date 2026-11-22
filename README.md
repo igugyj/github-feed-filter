@@ -148,7 +148,7 @@ npm run coverage       # unit + source tests under c8, writes coverage/
 
 - Bug reports and feature requests: open an [Issue](https://github.com/igugyj/github-feed-filter/issues)
 - Usage questions are welcome too — tag them with `[Question]` in the title
-- Pull requests: target the `main` branch and keep the UI copy in English
+- Pull requests: target the `master` branch and keep the UI copy in English
 
 When reporting a problem, the following information helps a lot:
 

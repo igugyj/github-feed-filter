@@ -89,9 +89,10 @@ jobs:
           echo "Trigger: ${trigger}"
 
       - name: Build userscript
-        env:
-          GFF_OUTFILE: dist/main.js
-        run: npm run build
+        run: |
+          npm run build
+          mkdir -p dist
+          cp github-feed-filter.user.js dist/main.js
 
       - name: Typecheck
         run: npm run typecheck
