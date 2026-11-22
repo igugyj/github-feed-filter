@@ -5,10 +5,6 @@
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Tampermonkey](https://img.shields.io/badge/Tampermonkey-%E2%89%A54.19-brightgreen)](https://www.tampermonkey.net/)
 
-- Repository: https://github.com/igugyj/github-feed-filter
-- Author: **Pfolg**
-- License: [MIT](LICENSE)
-
 ## Features
 
 - **Three filtering modes**, configured independently per category:
@@ -18,7 +14,7 @@
 - **Fine-grained categories** (recognized from the card's `data-hydro-view`, field `feed_card.card_type`):
 
   | Category | card_type |
-  |---|---|
+  | --- | --- |
   | Merged pull requests | `MERGED_PULL_REQUEST` |
   | Releases | `RELEASE` |
   | Trending repositories | `TRENDING_REPOSITORY` |
@@ -66,7 +62,7 @@ Settings panel layout:
 ```
 FEATURES
   [x] Feed filter          URLs: https://github.com/feed*
-  [x] Right column         URLs: https://github.com/
+  [x] Right column         URLs: https://github.com/*
   [x] Stargazers button    URLs: https://github.com/*/*
   [x] Only my repositories and organizations
   Signed in as: Pfolg
