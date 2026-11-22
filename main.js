@@ -350,10 +350,78 @@
   function normalizeText(s) {
     return s.replace(/\s+/g, " ").trim().toLowerCase();
   }
-  function matchesKeyword(text, keywords) {
+  function findKeyword(text, keywords) {
     const norm = normalizeText(text);
-    if (!norm) return false;
-    return keywords.some((kw) => kw.length > 0 && norm.includes(kw.toLowerCase()));
+    if (!norm) return null;
+    for (const kw of keywords) {
+      if (kw.length > 0 && norm.includes(kw.toLowerCase())) return kw;
+    }
+    return null;
+  }
+
+  // src/core/collapse.ts
+  var WRAPPER_ROLE = "collapse";
+  var HEADER_ROLE = "collapse-header";
+  function setText(el2, text) {
+    if (el2.textContent !== text) el2.textContent = text;
+  }
+  function headerText(label, expanded) {
+    return expanded ? label + " \u2014 click to collapse" : label + " \u2014 collapsed, click to expand";
+  }
+  function wrapperFor(el2) {
+    const parent = el2.parentElement;
+    return parent && parent.dataset.gffRole === WRAPPER_ROLE ? parent : null;
+  }
+  function headerFor(wrapper) {
+    const header = wrapper.firstElementChild;
+    return header && header.dataset.gffRole === HEADER_ROLE ? header : null;
+  }
+  var labels = /* @__PURE__ */ new WeakMap();
+  var toggles = /* @__PURE__ */ new WeakMap();
+  function createWrapper(el2) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "gff-collapse";
+    wrapper.dataset.gffRole = WRAPPER_ROLE;
+    const header = document.createElement("button");
+    header.type = "button";
+    header.className = "gff-collapse-header";
+    header.dataset.gffRole = HEADER_ROLE;
+    wrapper.appendChild(header);
+    el2.parentElement.insertBefore(wrapper, el2);
+    wrapper.appendChild(el2);
+    header.addEventListener("click", () => {
+      const expanded = el2.classList.toggle("gff-expanded");
+      wrapper.classList.toggle("gff-expanded", expanded);
+      header.setAttribute("aria-expanded", String(expanded));
+      setText(header, headerText(labels.get(wrapper) || "", expanded));
+      toggles.get(wrapper)?.();
+    });
+    return wrapper;
+  }
+  function applyCollapse(el2, label, onToggle) {
+    let wrapper = wrapperFor(el2);
+    if (!wrapper) {
+      if (!el2.parentElement) return;
+      wrapper = createWrapper(el2);
+    }
+    labels.set(wrapper, label);
+    if (onToggle) toggles.set(wrapper, onToggle);
+    const header = headerFor(wrapper);
+    if (!header) return;
+    const expanded = el2.classList.contains("gff-expanded");
+    wrapper.classList.toggle("gff-expanded", expanded);
+    header.setAttribute("aria-expanded", String(expanded));
+    setText(header, headerText(label, expanded));
+    el2.classList.add("gff-collapsed");
+    el2.classList.remove("gff-hide");
+  }
+  function removeCollapse(el2) {
+    const wrapper = wrapperFor(el2);
+    if (wrapper) {
+      if (wrapper.parentElement) wrapper.parentElement.insertBefore(el2, wrapper);
+      wrapper.remove();
+    }
+    el2.classList.remove("gff-collapsed", "gff-expanded");
   }
 
   // src/core/feed.ts
@@ -364,50 +432,20 @@
   var observedButton = null;
   var loadedPages = 0;
   var lastClickAt = 0;
-  function setText(el2, text) {
+  function setText2(el2, text) {
     if (el2.textContent !== text) el2.textContent = text;
   }
-  function ensurePlaceholder(el2, label) {
-    let ph = el2.previousElementSibling;
-    if (!(ph && ph.dataset.gffRole === "placeholder")) {
-      ph = document.createElement("div");
-      ph.dataset.gffRole = "placeholder";
-      ph.className = "gff-placeholder";
-      ph.addEventListener("click", () => {
-        const expanded = el2.classList.toggle("gff-expanded");
-        ph.classList.toggle("gff-expanded", expanded);
-        setText(ph, placeholderText(label, expanded));
+  function applyCardMode(el2, mode, label) {
+    if (mode === "hide") {
+      removeCollapse(el2);
+      el2.classList.add("gff-hide");
+    } else if (mode === "collapse") {
+      applyCollapse(el2, label, () => {
         if (currentCfg) updateFeedCount(currentCfg);
       });
-      el2.parentElement.insertBefore(ph, el2);
-    }
-    if (!el2.classList.contains("gff-expanded")) {
-      setText(ph, placeholderText(label, false));
-      ph.classList.remove("gff-expanded");
     } else {
-      setText(ph, placeholderText(label, true));
-      ph.classList.add("gff-expanded");
-    }
-  }
-  function placeholderText(label, expanded) {
-    return expanded ? label + " \u2014 click to collapse" : label + " \u2014 collapsed, click to expand";
-  }
-  function removePlaceholder(el2) {
-    const ph = el2.previousElementSibling;
-    if (ph && ph.dataset.gffRole === "placeholder") ph.remove();
-  }
-  function applyCardMode(el2, mode, key) {
-    if (mode === "hide") {
-      el2.classList.add("gff-hide");
-      el2.classList.remove("gff-collapsed");
-      removePlaceholder(el2);
-    } else if (mode === "collapse") {
+      removeCollapse(el2);
       el2.classList.remove("gff-hide");
-      el2.classList.add("gff-collapsed");
-      ensurePlaceholder(el2, labelFor(key));
-    } else {
-      el2.classList.remove("gff-hide", "gff-collapsed", "gff-expanded");
-      removePlaceholder(el2);
     }
   }
   function applyFeedCards(cfg) {
@@ -425,17 +463,21 @@
         }
         if (cutoffReached) {
           timeCutoffHit = true;
-          applyCardMode(el2, "hide", classifyArticle(el2));
+          applyCardMode(el2, "hide", "");
           continue;
         }
       }
       const key = classifyArticle(el2);
       let mode = resolveMode(cfg, key);
+      let label = labelFor(key);
       if (kwList.length > 0) {
-        const text = el2.textContent || "";
-        if (matchesKeyword(text, kwList)) mode = kw.mode;
+        const hit = findKeyword(el2.textContent || "", kwList);
+        if (hit !== null) {
+          mode = kw.mode;
+          label = `Matched keyword: "${hit}"`;
+        }
       }
-      applyCardMode(el2, mode, key);
+      applyCardMode(el2, mode, label);
     }
   }
   function placeEndMarker(marker, moreForm, feedContent) {
@@ -467,7 +509,7 @@
         marker.className = "gff-end-marker";
       }
       const text = "You\u2019ve reached the end of the feed \u2014 items older than " + tf.days + " day" + (tf.days === 1 ? "" : "s") + " are hidden.";
-      setText(marker, text);
+      setText2(marker, text);
       placeEndMarker(marker, moreForm, feedContent);
       if (moreForm) moreForm.classList.add("gff-hide");
     } else {
@@ -487,7 +529,7 @@
       if (card.classList.contains("gff-collapsed") && !card.classList.contains("gff-expanded")) n++;
     }
     const text = "Hidden: " + n + " item" + (n === 1 ? "" : "s");
-    setText(el2, text);
+    setText2(el2, text);
   }
   function destroyAutoLoad() {
     if (autoObserver) autoObserver.disconnect();
@@ -532,49 +574,16 @@
   }
 
   // src/core/right-column.ts
-  function setText2(el2, text) {
-    if (el2.textContent !== text) el2.textContent = text;
-  }
-  function ensurePlaceholder2(el2, label) {
-    let ph = el2.previousElementSibling;
-    if (!(ph && ph.dataset.gffRole === "placeholder")) {
-      ph = document.createElement("div");
-      ph.dataset.gffRole = "placeholder";
-      ph.className = "gff-placeholder";
-      ph.addEventListener("click", () => {
-        const expanded = el2.classList.toggle("gff-expanded");
-        ph.classList.toggle("gff-expanded", expanded);
-        setText2(ph, placeholderText2(label, expanded));
-      });
-      el2.parentElement.insertBefore(ph, el2);
-    }
-    if (!el2.classList.contains("gff-expanded")) {
-      setText2(ph, placeholderText2(label, false));
-      ph.classList.remove("gff-expanded");
-    } else {
-      setText2(ph, placeholderText2(label, true));
-      ph.classList.add("gff-expanded");
-    }
-  }
-  function placeholderText2(label, expanded) {
-    return expanded ? label + " \u2014 click to collapse" : label + " \u2014 collapsed, click to expand";
-  }
-  function removePlaceholder2(el2) {
-    const ph = el2.previousElementSibling;
-    if (ph && ph.dataset.gffRole === "placeholder") ph.remove();
-  }
   function applyMode(el2, mode, label) {
     if (mode === "hide") {
+      removeCollapse(el2);
       el2.classList.add("gff-hide");
-      el2.classList.remove("gff-collapsed");
-      removePlaceholder2(el2);
     } else if (mode === "collapse") {
       el2.classList.remove("gff-hide");
-      el2.classList.add("gff-collapsed");
-      ensurePlaceholder2(el2, label);
+      applyCollapse(el2, label);
     } else {
-      el2.classList.remove("gff-hide", "gff-collapsed", "gff-expanded");
-      removePlaceholder2(el2);
+      removeCollapse(el2);
+      el2.classList.remove("gff-hide");
     }
   }
   function applyRightColumn(cfg) {
@@ -858,18 +867,29 @@
 .gff-hide { display: none !important; }
 .gff-collapsed:not(.gff-expanded) { display: none !important; }
 
-.gff-placeholder {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 14px; margin: 4px 0;
+.gff-collapse {
+  margin: 4px 0;
   border: 1px dashed var(--borderColor-default, #d0d7de);
   border-radius: 6px;
+}
+.gff-collapse.gff-expanded { border-style: solid; }
+.gff-collapse-header {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; margin: 0; padding: 8px 14px;
+  border: 0; border-radius: 5px;
   background: var(--bgColor-muted, rgba(175,184,193,.2));
   color: var(--fgColor-muted, #656d76);
-  font-size: 12px; cursor: pointer; user-select: none;
+  font: inherit; font-size: 12px; text-align: left;
+  box-sizing: border-box; appearance: none;
+  cursor: pointer; user-select: none;
 }
-.gff-placeholder:hover { border-color: var(--fgColor-muted, #656d76); }
-.gff-placeholder::before { content: "\\25B8"; font-size: 10px; }
-.gff-placeholder.gff-expanded::before { content: "\\25BE"; }
+.gff-collapse-header:hover { background: rgba(175,184,193,.35); }
+.gff-collapse-header::before { content: "\\25B8"; font-size: 10px; }
+.gff-collapse.gff-expanded > .gff-collapse-header {
+  border-radius: 5px 5px 0 0;
+  border-bottom: 1px solid var(--borderColor-default, #d0d7de);
+}
+.gff-collapse.gff-expanded > .gff-collapse-header::before { content: "\\25BE"; }
 
 .gff-end-marker {
   padding: 24px 16px; text-align: center;
@@ -1020,9 +1040,9 @@
     if (text != null) node.textContent = text;
     return node;
   }
-  function segControl(scope, key, current, labels) {
+  function segControl(scope, key, current, labels2) {
     const wrap = el("span", "gff-seg");
-    for (const opt of labels) {
+    for (const opt of labels2) {
       const b = el("button");
       b.type = "button";
       b.textContent = opt.label;
