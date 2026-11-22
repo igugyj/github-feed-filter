@@ -9,7 +9,7 @@
 
 - **Three filtering modes**, configured independently per category:
   - `Show` — do not filter (default)
-  - `Collapse` — replace the card with a one-line placeholder; click it to expand or fold again
+  - `Collapse` — wrap the card in a collapsible container with a one-line header; click the header to expand or fold again
   - `Hide` — hide the card entirely (uncheck to restore immediately)
 - **Fine-grained categories** (recognized from the card's `data-hydro-view`, field `feed_card.card_type`):
 
@@ -27,7 +27,7 @@
   | Other activity | fallback for unrecognized cards |
   | **Stars & lists** (group) | `STARRED_REPOSITORY`, `ADDED_TO_LIST`; sub-items support `Inherit` |
 
-- **Keyword blocking**: one keyword per line, matched as a case-insensitive substring against the card text. Keyword mode is its own `Show / Collapse / Hide` switch and takes precedence over the category mode.
+- **Keyword blocking**: one keyword per line, matched as a case-insensitive substring against the card text. Keyword mode is its own `Show / Collapse / Hide` switch and takes precedence over the category mode. The container header shows the matched keyword.
 - **Per-URL feature gating**: each feature has its own enable switch and URL rules (one glob per line, `*` matches any characters). Defaults:
   - Feed filter: `https://github.com/feed*`
   - Right column: `https://github.com/`
@@ -98,7 +98,7 @@ Hidden: 42 items                [Reset to defaults]
 ```
 
 - Every change takes effect immediately and is saved automatically.
-- Cards in `Collapse` mode become a placeholder row; click the placeholder to temporarily expand that card.
+- Cards in `Collapse` mode are wrapped in a collapsible container; click its header to temporarily expand that card. The header shows the category, or the matched keyword when keyword blocking caused the collapse.
 - The panel closes when you click outside it or press `Esc`.
 
 ## How it works

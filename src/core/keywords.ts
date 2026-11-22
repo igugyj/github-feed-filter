@@ -11,9 +11,17 @@ export function normalizeText(s: string): string {
   return s.replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
+/** Return the first keyword matching the text (original casing), or null. */
+export function findKeyword(text: string, keywords: readonly string[]): string | null {
+  const norm = normalizeText(text);
+  if (!norm) return null;
+  for (const kw of keywords) {
+    if (kw.length > 0 && norm.includes(kw.toLowerCase())) return kw;
+  }
+  return null;
+}
+
 /** Case-insensitive substring match of any keyword against the text. */
 export function matchesKeyword(text: string, keywords: readonly string[]): boolean {
-  const norm = normalizeText(text);
-  if (!norm) return false;
-  return keywords.some(kw => kw.length > 0 && norm.includes(kw.toLowerCase()));
+  return findKeyword(text, keywords) !== null;
 }

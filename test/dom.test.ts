@@ -166,8 +166,8 @@ async function boot(opts: BootOptions): Promise<{
 
 const has = (el: Element | null | undefined, cls: string): boolean =>
   !!el && el.classList.contains(cls);
-const placeholders = (w: JSDOM['window']) =>
-  w.document.querySelectorAll('[data-gff-role="placeholder"]');
+const collapses = (w: JSDOM['window']) =>
+  w.document.querySelectorAll('[data-gff-role="collapse"]');
 const topCards = (w: JSDOM['window']) =>
   Array.from(w.document.querySelectorAll('article.js-feed-item-component')).filter(
     el => !el.parentElement?.closest('article.js-feed-item-component')
@@ -191,7 +191,7 @@ await ok('feed feature runs on /feed', async () => {
   const cs = topCards(w);
   assert.equal(cs.length, 7, 'seven top-level cards');
   assert.equal(cs.filter(c => has(c, 'gff-hide')).length, 2, 'two merged cards hidden');
-  assert.equal(placeholders(w).length, 0);
+  assert.equal(collapses(w).length, 0);
 });
 
 await ok('right column does NOT run on /feed', async () => {
@@ -216,7 +216,7 @@ await ok('right column runs on / and feed does not', async () => {
   assert.equal(topCards(w).filter(c => has(c, 'gff-hide')).length, 0, 'feed not filtered on home');
 });
 
-await ok('collapse mode inserts expandable placeholders and counts', async () => {
+await ok('collapse mode wraps cards in expandable containers and counts', async () => {
   const { window: w } = await boot({
     url: 'https://github.com/feed',
     html: feedHtml(),
@@ -225,14 +225,16 @@ await ok('collapse mode inserts expandable placeholders and counts', async () =>
   const cs = topCards(w);
   const collapsed = cs.filter(c => has(c, 'gff-collapsed'));
   assert.equal(collapsed.length, 1, 'one release card collapsed');
-  assert.equal(placeholders(w).length, 1);
+  assert.equal(collapses(w).length, 1);
   const first = collapsed[0];
-  const ph = first.previousElementSibling as HTMLElement;
-  assert.ok(ph.dataset.gffRole === 'placeholder');
-  assert.ok(/click to expand/.test(ph.textContent || ''));
-  ph.dispatchEvent(new w.Event('click', { bubbles: true }));
+  const wrapper = first.parentElement as HTMLElement;
+  assert.equal(wrapper.dataset.gffRole, 'collapse');
+  const header = wrapper.querySelector('[data-gff-role="collapse-header"]') as HTMLElement;
+  assert.ok(/Releases/.test(header.textContent || ''));
+  assert.ok(/click to expand/.test(header.textContent || ''));
+  header.dispatchEvent(new w.Event('click', { bubbles: true }));
   assert.ok(has(first, 'gff-expanded'));
-  assert.ok(/click to collapse/.test(ph.textContent || ''));
+  assert.ok(/click to collapse/.test(header.textContent || ''));
 });
 
 await ok('star group inherit and sub override', async () => {
@@ -270,6 +272,32 @@ await ok('keyword blocking uses its own mode and beats category mode', async () 
   assert.ok(has(extra, 'gff-hide'), 'keyword-matched card hidden');
   // Non-matching cards stay visible.
   assert.ok(!has(cs.find(c => /merged pull request/i.test(c.textContent || ''))!, 'gff-hide'));
+});
+
+await ok('keyword collapse shows the matched keyword in the container header', async () => {
+  const { window: w } = await boot({
+    url: 'https://github.com/feed',
+    html: feedHtml(),
+    config: {
+      modes: { merged: 'hide' },
+      keywords: { enabled: true, mode: 'collapse', list: ['SECRET'] }
+    }
+  });
+  const container = w.document.querySelector('div[data-target="feed-container.content"]')!;
+  const extra = w.document.createElement('article');
+  extra.className = 'js-feed-item-component';
+  extra.textContent = 'this card has a secret phrase';
+  container.insertBefore(extra, container.firstChild);
+  await sleep(150);
+
+  assert.ok(has(extra, 'gff-collapsed'), 'keyword-matched card collapsed');
+  assert.ok(!has(extra, 'gff-hide'));
+  const wrapper = extra.parentElement as HTMLElement;
+  assert.equal(wrapper.dataset.gffRole, 'collapse');
+  const header = wrapper.querySelector('[data-gff-role="collapse-header"]') as HTMLElement;
+  assert.match(header.textContent || '', /Matched keyword: "SECRET"/);
+  assert.doesNotMatch(header.textContent || '', /Other activity/);
+  assert.match(header.textContent || '', /click to expand/);
 });
 
 await ok('time filter hides old cards, inserts end marker at bottom, drops More', async () => {

@@ -388,11 +388,12 @@ await ok('right column filters banner and changelog independently', () => {
   assert.ok(log.classList.contains('gff-collapsed'));
   assert.ok(!aside.classList.contains('gff-hide'));
 
-  const ph = log.previousElementSibling as HTMLElement;
-  assert.equal(ph.dataset.gffRole, 'placeholder');
-  ph.click();
+  const wrapper = log.parentElement as HTMLElement;
+  assert.equal(wrapper.dataset.gffRole, 'collapse');
+  const header = wrapper.querySelector('[data-gff-role="collapse-header"]') as HTMLElement;
+  header.click();
   assert.ok(log.classList.contains('gff-expanded'));
-  ph.click();
+  header.click();
   assert.ok(!log.classList.contains('gff-expanded'));
 
   cfg.right.changelog = 'hide';
@@ -400,13 +401,14 @@ await ok('right column filters banner and changelog independently', () => {
   assert.ok(log.classList.contains('gff-hide'));
   assert.ok(!log.classList.contains('gff-collapsed'));
   assert.ok(aside.classList.contains('gff-hide'));
+  assert.equal(aside.querySelectorAll('[data-gff-role="collapse"]').length, 0);
 
   cfg.right.banner = 'show';
   cfg.right.changelog = 'show';
   rightColumn.applyRightColumn(cfg);
   assert.ok(!banner.classList.contains('gff-hide'));
   assert.ok(!aside.classList.contains('gff-hide'));
-  assert.equal(aside.querySelectorAll('[data-gff-role="placeholder"]').length, 0);
+  assert.equal(aside.querySelectorAll('[data-gff-role="collapse"]').length, 0);
 });
 
 await ok('right column ignores pages without an aside', () => {
@@ -428,23 +430,32 @@ await ok('applyFeed hides cards by category and updates the counter', () => {
   assert.equal(document.getElementById('gff-count')!.textContent, 'Hidden: 2 items');
 });
 
-await ok('collapse inserts a reusable clickable placeholder', () => {
+await ok('collapse wraps the card in a reusable clickable container', () => {
   const cfg = defaults.cloneDefault();
   cfg.modes.release = 'collapse';
   feed.applyFeed(cfg);
-  feed.applyFeed(cfg); // second pass reuses the existing placeholder
+  feed.applyFeed(cfg); // second pass reuses the existing wrapper
 
   const rel = topCards().find(a => /released v1\.0/.test(a.textContent || ''))!;
   assert.ok(rel.classList.contains('gff-collapsed'));
-  const ph = rel.previousElementSibling as HTMLElement;
-  assert.equal(ph.dataset.gffRole, 'placeholder');
-  assert.ok(/click to expand/.test(ph.textContent || ''));
+  const wrapper = rel.parentElement as HTMLElement;
+  assert.equal(wrapper.dataset.gffRole, 'collapse');
+  assert.ok(wrapper.classList.contains('gff-collapse'));
+  const header = wrapper.querySelector('[data-gff-role="collapse-header"]') as HTMLElement;
+  assert.ok(/Releases/.test(header.textContent || ''));
+  assert.ok(/click to expand/.test(header.textContent || ''));
 
-  ph.click();
+  header.click();
   assert.ok(rel.classList.contains('gff-expanded'));
-  assert.ok(/click to collapse/.test(ph.textContent || ''));
+  assert.ok(wrapper.classList.contains('gff-expanded'));
+  assert.ok(/click to collapse/.test(header.textContent || ''));
   assert.equal(document.getElementById('gff-count')!.textContent, 'Hidden: 0 items');
-  assert.equal(document.querySelectorAll('[data-gff-role="placeholder"]').length, 1);
+  assert.equal(document.querySelectorAll('[data-gff-role="collapse"]').length, 1);
+
+  // A second pass preserves the expanded state and the wrapper.
+  feed.applyFeed(cfg);
+  assert.equal(document.querySelectorAll('[data-gff-role="collapse"]').length, 1);
+  assert.ok(rel.classList.contains('gff-expanded'));
 });
 
 await ok('keyword blocking overrides the category mode', () => {
@@ -467,6 +478,22 @@ await ok('keyword blocking overrides the category mode', () => {
   cfg.keywords.mode = 'collapse';
   feed.applyFeed(cfg);
   assert.ok(extra.classList.contains('gff-collapsed'));
+  const wrapper = extra.parentElement as HTMLElement;
+  const header = wrapper.querySelector('[data-gff-role="collapse-header"]') as HTMLElement;
+  assert.equal(wrapper.dataset.gffRole, 'collapse');
+  assert.match(header.textContent || '', /Matched keyword: "ZEBRA"/);
+  assert.doesNotMatch(header.textContent || '', /Other activity/);
+
+  // When the keyword no longer applies, the header falls back to the category.
+  cfg.keywords.enabled = false;
+  cfg.modes.other = 'collapse';
+  feed.applyFeed(cfg);
+  assert.match(header.textContent || '', /Other activity/);
+  assert.doesNotMatch(header.textContent || '', /Matched keyword/);
+
+  cfg.modes.other = 'show';
+  feed.applyFeed(cfg);
+  assert.equal(document.querySelectorAll('[data-gff-role="collapse"]').length, 0);
   extra.remove();
 });
 

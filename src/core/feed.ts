@@ -6,7 +6,8 @@ import {
   cardTimestamp
 } from './classify';
 import { labelFor } from './labels';
-import { matchesKeyword } from './keywords';
+import { findKeyword } from './keywords';
+import { applyCollapse, removeCollapse } from './collapse';
 
 const END_MARKER_ID = 'gff-end-marker';
 
@@ -21,52 +22,17 @@ function setText(el: Element, text: string): void {
   if (el.textContent !== text) el.textContent = text;
 }
 
-function ensurePlaceholder(el: Element, label: string): void {
-  let ph = el.previousElementSibling as HTMLElement | null;
-  if (!(ph && ph.dataset.gffRole === 'placeholder')) {
-    ph = document.createElement('div');
-    ph.dataset.gffRole = 'placeholder';
-    ph.className = 'gff-placeholder';
-    ph.addEventListener('click', () => {
-      const expanded = el.classList.toggle('gff-expanded');
-      ph!.classList.toggle('gff-expanded', expanded);
-      setText(ph!, placeholderText(label, expanded));
+function applyCardMode(el: Element, mode: Mode, label: string): void {
+  if (mode === 'hide') {
+    removeCollapse(el);
+    el.classList.add('gff-hide');
+  } else if (mode === 'collapse') {
+    applyCollapse(el, label, () => {
       if (currentCfg) updateFeedCount(currentCfg);
     });
-    el.parentElement!.insertBefore(ph, el);
-  }
-  if (!el.classList.contains('gff-expanded')) {
-    setText(ph, placeholderText(label, false));
-    ph.classList.remove('gff-expanded');
   } else {
-    setText(ph, placeholderText(label, true));
-    ph.classList.add('gff-expanded');
-  }
-}
-
-function placeholderText(label: string, expanded: boolean): string {
-  return expanded
-    ? label + ' — click to collapse'
-    : label + ' — collapsed, click to expand';
-}
-
-function removePlaceholder(el: Element): void {
-  const ph = el.previousElementSibling as HTMLElement | null;
-  if (ph && ph.dataset.gffRole === 'placeholder') ph.remove();
-}
-
-function applyCardMode(el: Element, mode: Mode, key: Parameters<typeof labelFor>[0]): void {
-  if (mode === 'hide') {
-    el.classList.add('gff-hide');
-    el.classList.remove('gff-collapsed');
-    removePlaceholder(el);
-  } else if (mode === 'collapse') {
+    removeCollapse(el);
     el.classList.remove('gff-hide');
-    el.classList.add('gff-collapsed');
-    ensurePlaceholder(el, labelFor(key));
-  } else {
-    el.classList.remove('gff-hide', 'gff-collapsed', 'gff-expanded');
-    removePlaceholder(el);
   }
 }
 
@@ -88,21 +54,25 @@ function applyFeedCards(cfg: Config): void {
       }
       if (cutoffReached) {
         timeCutoffHit = true;
-        applyCardMode(el, 'hide', classifyArticle(el));
+        applyCardMode(el, 'hide', '');
         continue;
       }
     }
 
     const key = classifyArticle(el);
     let mode: Mode = resolveMode(cfg, key);
+    let label = labelFor(key);
 
     // Keyword blocking takes precedence over the category mode.
     if (kwList.length > 0) {
-      const text = el.textContent || '';
-      if (matchesKeyword(text, kwList)) mode = kw.mode;
+      const hit = findKeyword(el.textContent || '', kwList);
+      if (hit !== null) {
+        mode = kw.mode;
+        label = `Matched keyword: "${hit}"`;
+      }
     }
 
-    applyCardMode(el, mode, key);
+    applyCardMode(el, mode, label);
   }
 }
 

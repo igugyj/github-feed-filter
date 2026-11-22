@@ -20,7 +20,7 @@ import {
 } from '../src/core/classify';
 import { labelFor, CATEGORIES, STAR_GROUP } from '../src/core/labels';
 import { matchesUrl, matchesAny } from '../src/core/url-scope';
-import { parseKeywords, normalizeText, matchesKeyword } from '../src/core/keywords';
+import { parseKeywords, normalizeText, matchesKeyword, findKeyword } from '../src/core/keywords';
 import { cloneDefault, normalizeConfig } from '../src/config/defaults';
 import { loadConfig, V1_KEY, V2_KEY } from '../src/config/storage';
 import { parseOrgLogins, isOwnOrOrg, getViewerLogin, getRepoNwo } from '../src/core/ownership';
@@ -218,6 +218,14 @@ ok('matchesKeyword is case-insensitive substring', () => {
   assert.equal(matchesKeyword('an AI Agent appears', kws), true);
   assert.equal(matchesKeyword('python only', kws), false);
   assert.equal(matchesKeyword('', kws), false);
+});
+
+ok('findKeyword returns the first matching keyword in its configured form', () => {
+  const kws = ['rust', 'AI agent'];
+  assert.equal(findKeyword('I love RUST', kws), 'rust');
+  assert.equal(findKeyword('an AI Agent appears', kws), 'AI agent');
+  assert.equal(findKeyword('python only', kws), null);
+  assert.equal(findKeyword('', kws), null);
 });
 
 // ---- config ---------------------------------------------------------------

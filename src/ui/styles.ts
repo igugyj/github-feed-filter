@@ -4,18 +4,29 @@ export const CSS = `
 .gff-hide { display: none !important; }
 .gff-collapsed:not(.gff-expanded) { display: none !important; }
 
-.gff-placeholder {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 14px; margin: 4px 0;
+.gff-collapse {
+  margin: 4px 0;
   border: 1px dashed var(--borderColor-default, #d0d7de);
   border-radius: 6px;
+}
+.gff-collapse.gff-expanded { border-style: solid; }
+.gff-collapse-header {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; margin: 0; padding: 8px 14px;
+  border: 0; border-radius: 5px;
   background: var(--bgColor-muted, rgba(175,184,193,.2));
   color: var(--fgColor-muted, #656d76);
-  font-size: 12px; cursor: pointer; user-select: none;
+  font: inherit; font-size: 12px; text-align: left;
+  box-sizing: border-box; appearance: none;
+  cursor: pointer; user-select: none;
 }
-.gff-placeholder:hover { border-color: var(--fgColor-muted, #656d76); }
-.gff-placeholder::before { content: "\\25B8"; font-size: 10px; }
-.gff-placeholder.gff-expanded::before { content: "\\25BE"; }
+.gff-collapse-header:hover { background: rgba(175,184,193,.35); }
+.gff-collapse-header::before { content: "\\25B8"; font-size: 10px; }
+.gff-collapse.gff-expanded > .gff-collapse-header {
+  border-radius: 5px 5px 0 0;
+  border-bottom: 1px solid var(--borderColor-default, #d0d7de);
+}
+.gff-collapse.gff-expanded > .gff-collapse-header::before { content: "\\25BE"; }
 
 .gff-end-marker {
   padding: 24px 16px; text-align: center;
