@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub Feed Filter
 // @namespace    https://github.com/igugyj/github-feed-filter
-// @version      2.0.0
+// @version      2.0.1
 // @description  Filter, collapse or hide GitHub feed cards by type, block by keyword, age the feed with time cutoff and auto-load. Adds a Stargazers button on your own repositories. Fully configurable.
 // @author       Pfolg
 // @license      MIT
@@ -9,9 +9,7 @@
 // @supportURL   https://github.com/igugyj/github-feed-filter/issues
 // @downloadURL  https://raw.githubusercontent.com/igugyj/github-feed-filter/release/main.js
 // @updateURL    https://raw.githubusercontent.com/igugyj/github-feed-filter/release/main.js
-// @match        https://github.com/feed*
-// @match        https://github.com/
-// @match        https://github.com/*/*
+// @match        https://github.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
