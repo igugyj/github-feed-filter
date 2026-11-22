@@ -3,4 +3,12 @@ example
 
 # Dependencies
 node_modules
-package-lock.json
+
+# Build artifacts and reports
+dist/
+coverage/
+.ci/
+github-feed-filter.user.js
+
+# Scratch files
+r.js

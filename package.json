@@ -1,12 +1,18 @@
 {
   "name": "github-feed-filter",
-  "version": "1.0.1",
-  "description": "Tampermonkey userscript that filters, collapses or hides GitHub feed cards by type, with time cutoff and auto-load.",
+  "version": "2.0.0",
+  "description": "Tampermonkey userscript that filters, collapses or hides GitHub feed cards by type, blocks by keyword, with time cutoff and auto-load. Adds a Stargazers button on your own repositories.",
+  "type": "module",
   "scripts": {
-    "test": "npm run test:classify && npm run test:dom",
-    "test:classify": "node test/classify.test.js",
-    "test:dom": "node test/dom.test.js",
-    "lint": "node --check github-feed-filter.user.js"
+    "build": "node build/build.mjs",
+    "watch": "node build/build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && npm run typecheck && npm run test:all && npm run test:dom",
+    "test:all": "tsx test/unit.test.ts && tsx test/coverage.test.ts",
+    "test:unit": "tsx test/unit.test.ts",
+    "test:coverage": "tsx test/coverage.test.ts",
+    "test:dom": "tsx test/dom.test.ts",
+    "coverage": "c8 --reporter=text --reporter=json-summary --include \"src/**/*.ts\" --reports-dir coverage npm run test:all"
   },
   "repository": {
     "type": "git",
@@ -22,6 +28,12 @@
   "author": "Pfolg",
   "license": "MIT",
   "devDependencies": {
-    "jsdom": "^24.0.0"
+    "@types/jsdom": "^21.1.7",
+    "@types/tampermonkey": "^5.0.2",
+    "c8": "^12.0.0",
+    "esbuild": "^0.25.0",
+    "jsdom": "^24.1.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
   }
 }

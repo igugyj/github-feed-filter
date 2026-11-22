@@ -1,0 +1,137 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build (defaults to package.json, may start with "v")
+        required: false
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve build metadata
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${INPUT_VERSION}" ]; then
+            version="${INPUT_VERSION}"
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME}"
+          else
+            version="$(node -p "require('./package.json').version")"
+          fi
+          version="${version#v}"
+
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag="${GITHUB_REF_NAME}"
+            trigger="tag push (${GITHUB_REF_NAME})"
+            target="$(git rev-list -n 1 "${GITHUB_REF_NAME}")"
+            if git merge-base --is-ancestor "${target}" "origin/${DEFAULT_BRANCH}"; then
+              branch="${DEFAULT_BRANCH}"
+            else
+              branch="$(git for-each-ref --contains "${target}" \
+                --format='%(refname:strip=3)' refs/remotes/origin \
+                | grep -v -E '^(release|HEAD)$' | head -n 1 || true)"
+              branch="${branch:-${DEFAULT_BRANCH}}"
+            fi
+          else
+            tag=""
+            trigger="manual dispatch"
+            branch="${GITHUB_REF_NAME}"
+            target="${GITHUB_SHA}"
+          fi
+
+          {
+            echo "GFF_VERSION=${version}"
+            echo "GFF_BRANCH=${branch}"
+            echo "GFF_COMMIT=${target}"
+            echo "GFF_DATE=$(date -u +'%Y-%m-%d %H:%M UTC')"
+            echo "GFF_TRIGGER=${trigger}"
+            echo "GFF_TAG=${tag}"
+            echo "GFF_REPO=${GITHUB_REPOSITORY}"
+            echo "GFF_RUN_URL=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } >> "${GITHUB_ENV}"
+
+          echo "Version: ${version}"
+          echo "Source branch: ${branch}"
+          echo "Trigger: ${trigger}"
+
+      - name: Build userscript
+        env:
+          GFF_OUTFILE: dist/main.js
+        run: npm run build
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run tests with coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci
+          npm run coverage 2>&1 | tee .ci/tests.log
+          npm run test:dom 2>&1 | tee .ci/dom.log
+
+      - name: Generate release README
+        run: node scripts/gen-readme.mjs
+
+      - name: Publish to release branch
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin release || true
+          if git rev-parse --verify --quiet origin/release > /dev/null; then
+            git checkout -B release origin/release
+          else
+            git checkout --orphan release
+          fi
+
+          # The release branch contains only the build output.
+          git rm -r --cached -f . > /dev/null 2>&1 || true
+          cp dist/main.js main.js
+          cp dist/README.md README.md
+          git add -f main.js README.md
+
+          if git diff --cached --quiet; then
+            echo "release branch is already up to date"
+            exit 0
+          fi
+
+          git commit -m "build: v${GFF_VERSION} (${GFF_COMMIT:0:7})"
+          git push origin release
