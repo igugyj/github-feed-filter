@@ -1,6 +1,6 @@
 {
   "name": "github-feed-filter",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Tampermonkey userscript that filters, collapses or hides GitHub feed cards by type, blocks by keyword, with time cutoff and auto-load. Adds a Stargazers button on your own repositories.",
   "type": "module",
   "scripts": {

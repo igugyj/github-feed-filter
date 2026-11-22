@@ -9,9 +9,7 @@
 // @supportURL   https://github.com/igugyj/github-feed-filter/issues
 // @downloadURL  https://raw.githubusercontent.com/igugyj/github-feed-filter/release/main.js
 // @updateURL    https://raw.githubusercontent.com/igugyj/github-feed-filter/release/main.js
-// @match        https://github.com/feed*
-// @match        https://github.com/
-// @match        https://github.com/*/*
+// @match        https://github.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
