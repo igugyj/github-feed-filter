@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub Feed Filter
 // @namespace    https://github.com/igugyj/github-feed-filter
-// @version      2.0.0
+// @version      2.0.2
 // @description  Filter, collapse or hide GitHub feed cards by type, block by keyword, age the feed with time cutoff and auto-load. Adds a Stargazers button on your own repositories. Fully configurable.
 // @author       Pfolg
 // @license      MIT
@@ -9,9 +9,7 @@
 // @supportURL   https://github.com/igugyj/github-feed-filter/issues
 // @downloadURL  https://raw.githubusercontent.com/igugyj/github-feed-filter/release/main.js
 // @updateURL    https://raw.githubusercontent.com/igugyj/github-feed-filter/release/main.js
-// @match        https://github.com/feed*
-// @match        https://github.com/
-// @match        https://github.com/*/*
+// @match        https://github.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
@@ -290,17 +288,16 @@
     );
   }
   function cardTimestamp(article) {
-    const rt = article.querySelector("relative-time[datetime]");
-    if (rt) {
-      const t = Date.parse(rt.getAttribute("datetime") || "");
-      if (!Number.isNaN(t)) return t;
-    }
-    const card = readFeedCard(article);
-    if (card && card.created_at) {
-      const t = Date.parse(card.created_at);
-      if (!Number.isNaN(t)) return t;
-    }
-    return null;
+    const ownHeader = Array.from(article.querySelectorAll("header")).find(
+      (h) => h.closest("article.js-feed-item-component") === article
+    );
+    const headerRt = ownHeader ? ownHeader.querySelector("relative-time[datetime]") : null;
+    const own = headerRt || Array.from(article.querySelectorAll("relative-time[datetime]")).find(
+      (rt) => rt.closest("article.js-feed-item-component") === article
+    );
+    if (!own) return null;
+    const t = Date.parse(own.getAttribute("datetime") || "");
+    return Number.isNaN(t) ? null : t;
   }
 
   // src/core/labels.ts
@@ -352,10 +349,78 @@
   function normalizeText(s) {
     return s.replace(/\s+/g, " ").trim().toLowerCase();
   }
-  function matchesKeyword(text, keywords) {
+  function findKeyword(text, keywords) {
     const norm = normalizeText(text);
-    if (!norm) return false;
-    return keywords.some((kw) => kw.length > 0 && norm.includes(kw.toLowerCase()));
+    if (!norm) return null;
+    for (const kw of keywords) {
+      if (kw.length > 0 && norm.includes(kw.toLowerCase())) return kw;
+    }
+    return null;
+  }
+
+  // src/core/collapse.ts
+  var WRAPPER_ROLE = "collapse";
+  var HEADER_ROLE = "collapse-header";
+  function setText(el2, text) {
+    if (el2.textContent !== text) el2.textContent = text;
+  }
+  function headerText(label, expanded) {
+    return expanded ? label + " \u2014 click to collapse" : label + " \u2014 collapsed, click to expand";
+  }
+  function wrapperFor(el2) {
+    const parent = el2.parentElement;
+    return parent && parent.dataset.gffRole === WRAPPER_ROLE ? parent : null;
+  }
+  function headerFor(wrapper) {
+    const header = wrapper.firstElementChild;
+    return header && header.dataset.gffRole === HEADER_ROLE ? header : null;
+  }
+  var labels = /* @__PURE__ */ new WeakMap();
+  var toggles = /* @__PURE__ */ new WeakMap();
+  function createWrapper(el2) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "gff-collapse";
+    wrapper.dataset.gffRole = WRAPPER_ROLE;
+    const header = document.createElement("button");
+    header.type = "button";
+    header.className = "gff-collapse-header";
+    header.dataset.gffRole = HEADER_ROLE;
+    wrapper.appendChild(header);
+    el2.parentElement.insertBefore(wrapper, el2);
+    wrapper.appendChild(el2);
+    header.addEventListener("click", () => {
+      const expanded = el2.classList.toggle("gff-expanded");
+      wrapper.classList.toggle("gff-expanded", expanded);
+      header.setAttribute("aria-expanded", String(expanded));
+      setText(header, headerText(labels.get(wrapper) || "", expanded));
+      toggles.get(wrapper)?.();
+    });
+    return wrapper;
+  }
+  function applyCollapse(el2, label, onToggle) {
+    let wrapper = wrapperFor(el2);
+    if (!wrapper) {
+      if (!el2.parentElement) return;
+      wrapper = createWrapper(el2);
+    }
+    labels.set(wrapper, label);
+    if (onToggle) toggles.set(wrapper, onToggle);
+    const header = headerFor(wrapper);
+    if (!header) return;
+    const expanded = el2.classList.contains("gff-expanded");
+    wrapper.classList.toggle("gff-expanded", expanded);
+    header.setAttribute("aria-expanded", String(expanded));
+    setText(header, headerText(label, expanded));
+    el2.classList.add("gff-collapsed");
+    el2.classList.remove("gff-hide");
+  }
+  function removeCollapse(el2) {
+    const wrapper = wrapperFor(el2);
+    if (wrapper) {
+      if (wrapper.parentElement) wrapper.parentElement.insertBefore(el2, wrapper);
+      wrapper.remove();
+    }
+    el2.classList.remove("gff-collapsed", "gff-expanded");
   }
 
   // src/core/feed.ts
@@ -366,50 +431,20 @@
   var observedButton = null;
   var loadedPages = 0;
   var lastClickAt = 0;
-  function setText(el2, text) {
+  function setText2(el2, text) {
     if (el2.textContent !== text) el2.textContent = text;
   }
-  function ensurePlaceholder(el2, label) {
-    let ph = el2.previousElementSibling;
-    if (!(ph && ph.dataset.gffRole === "placeholder")) {
-      ph = document.createElement("div");
-      ph.dataset.gffRole = "placeholder";
-      ph.className = "gff-placeholder";
-      ph.addEventListener("click", () => {
-        const expanded = el2.classList.toggle("gff-expanded");
-        ph.classList.toggle("gff-expanded", expanded);
-        setText(ph, placeholderText(label, expanded));
+  function applyCardMode(el2, mode, label) {
+    if (mode === "hide") {
+      removeCollapse(el2);
+      el2.classList.add("gff-hide");
+    } else if (mode === "collapse") {
+      applyCollapse(el2, label, () => {
         if (currentCfg) updateFeedCount(currentCfg);
       });
-      el2.parentElement.insertBefore(ph, el2);
-    }
-    if (!el2.classList.contains("gff-expanded")) {
-      setText(ph, placeholderText(label, false));
-      ph.classList.remove("gff-expanded");
     } else {
-      setText(ph, placeholderText(label, true));
-      ph.classList.add("gff-expanded");
-    }
-  }
-  function placeholderText(label, expanded) {
-    return expanded ? label + " \u2014 click to collapse" : label + " \u2014 collapsed, click to expand";
-  }
-  function removePlaceholder(el2) {
-    const ph = el2.previousElementSibling;
-    if (ph && ph.dataset.gffRole === "placeholder") ph.remove();
-  }
-  function applyCardMode(el2, mode, key) {
-    if (mode === "hide") {
-      el2.classList.add("gff-hide");
-      el2.classList.remove("gff-collapsed");
-      removePlaceholder(el2);
-    } else if (mode === "collapse") {
+      removeCollapse(el2);
       el2.classList.remove("gff-hide");
-      el2.classList.add("gff-collapsed");
-      ensurePlaceholder(el2, labelFor(key));
-    } else {
-      el2.classList.remove("gff-hide", "gff-collapsed", "gff-expanded");
-      removePlaceholder(el2);
     }
   }
   function applyFeedCards(cfg) {
@@ -418,27 +453,29 @@
     const kw = cfg.keywords;
     const kwList = kw.enabled ? kw.list : [];
     timeCutoffHit = false;
-    let cutoffReached = false;
+    let oldCardFound = false;
     for (const el2 of topLevelCards(document)) {
       if (cutoff !== null) {
-        if (!cutoffReached) {
-          const ts = cardTimestamp(el2);
-          if (ts !== null && ts < cutoff) cutoffReached = true;
-        }
-        if (cutoffReached) {
-          timeCutoffHit = true;
-          applyCardMode(el2, "hide", classifyArticle(el2));
+        const ts = cardTimestamp(el2);
+        if (ts !== null && ts < cutoff) {
+          oldCardFound = true;
+          applyCardMode(el2, "hide", "");
           continue;
         }
       }
       const key = classifyArticle(el2);
       let mode = resolveMode(cfg, key);
+      let label = labelFor(key);
       if (kwList.length > 0) {
-        const text = el2.textContent || "";
-        if (matchesKeyword(text, kwList)) mode = kw.mode;
+        const hit = findKeyword(el2.textContent || "", kwList);
+        if (hit !== null) {
+          mode = kw.mode;
+          label = `Matched keyword: "${hit}"`;
+        }
       }
-      applyCardMode(el2, mode, key);
+      applyCardMode(el2, mode, label);
     }
+    timeCutoffHit = oldCardFound;
   }
   function placeEndMarker(marker, moreForm, feedContent) {
     let parent;
@@ -469,7 +506,7 @@
         marker.className = "gff-end-marker";
       }
       const text = "You\u2019ve reached the end of the feed \u2014 items older than " + tf.days + " day" + (tf.days === 1 ? "" : "s") + " are hidden.";
-      setText(marker, text);
+      setText2(marker, text);
       placeEndMarker(marker, moreForm, feedContent);
       if (moreForm) moreForm.classList.add("gff-hide");
     } else {
@@ -489,7 +526,7 @@
       if (card.classList.contains("gff-collapsed") && !card.classList.contains("gff-expanded")) n++;
     }
     const text = "Hidden: " + n + " item" + (n === 1 ? "" : "s");
-    setText(el2, text);
+    setText2(el2, text);
   }
   function destroyAutoLoad() {
     if (autoObserver) autoObserver.disconnect();
@@ -534,49 +571,16 @@
   }
 
   // src/core/right-column.ts
-  function setText2(el2, text) {
-    if (el2.textContent !== text) el2.textContent = text;
-  }
-  function ensurePlaceholder2(el2, label) {
-    let ph = el2.previousElementSibling;
-    if (!(ph && ph.dataset.gffRole === "placeholder")) {
-      ph = document.createElement("div");
-      ph.dataset.gffRole = "placeholder";
-      ph.className = "gff-placeholder";
-      ph.addEventListener("click", () => {
-        const expanded = el2.classList.toggle("gff-expanded");
-        ph.classList.toggle("gff-expanded", expanded);
-        setText2(ph, placeholderText2(label, expanded));
-      });
-      el2.parentElement.insertBefore(ph, el2);
-    }
-    if (!el2.classList.contains("gff-expanded")) {
-      setText2(ph, placeholderText2(label, false));
-      ph.classList.remove("gff-expanded");
-    } else {
-      setText2(ph, placeholderText2(label, true));
-      ph.classList.add("gff-expanded");
-    }
-  }
-  function placeholderText2(label, expanded) {
-    return expanded ? label + " \u2014 click to collapse" : label + " \u2014 collapsed, click to expand";
-  }
-  function removePlaceholder2(el2) {
-    const ph = el2.previousElementSibling;
-    if (ph && ph.dataset.gffRole === "placeholder") ph.remove();
-  }
   function applyMode(el2, mode, label) {
     if (mode === "hide") {
+      removeCollapse(el2);
       el2.classList.add("gff-hide");
-      el2.classList.remove("gff-collapsed");
-      removePlaceholder2(el2);
     } else if (mode === "collapse") {
       el2.classList.remove("gff-hide");
-      el2.classList.add("gff-collapsed");
-      ensurePlaceholder2(el2, label);
+      applyCollapse(el2, label);
     } else {
-      el2.classList.remove("gff-hide", "gff-collapsed", "gff-expanded");
-      removePlaceholder2(el2);
+      removeCollapse(el2);
+      el2.classList.remove("gff-hide");
     }
   }
   function applyRightColumn(cfg) {
@@ -860,18 +864,43 @@
 .gff-hide { display: none !important; }
 .gff-collapsed:not(.gff-expanded) { display: none !important; }
 
-.gff-placeholder {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 14px; margin: 4px 0;
+.gff-collapse {
+  margin: 4px 0;
   border: 1px dashed var(--borderColor-default, #d0d7de);
   border-radius: 6px;
+}
+.gff-collapse.gff-expanded { border-style: solid; }
+.gff-collapse-header {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; margin: 0; padding: 8px 14px;
+  border: 0; border-radius: 5px;
   background: var(--bgColor-muted, rgba(175,184,193,.2));
   color: var(--fgColor-muted, #656d76);
-  font-size: 12px; cursor: pointer; user-select: none;
+  font: inherit; font-size: 12px; text-align: left;
+  box-sizing: border-box; appearance: none;
+  cursor: pointer; user-select: none;
 }
-.gff-placeholder:hover { border-color: var(--fgColor-muted, #656d76); }
-.gff-placeholder::before { content: "\\25B8"; font-size: 10px; }
-.gff-placeholder.gff-expanded::before { content: "\\25BE"; }
+.gff-collapse-header:hover { background: rgba(175,184,193,.35); }
+.gff-collapse-header::before { content: "\\25B8"; font-size: 10px; }
+.gff-collapse.gff-expanded > .gff-collapse-header {
+  border-radius: 5px 5px 0 0;
+  border-bottom: 1px solid var(--borderColor-default, #d0d7de);
+}
+.gff-collapse.gff-expanded > .gff-collapse-header::before { content: "\\25BE"; }
+
+.gff-badge {
+  position: fixed; right: 16px; bottom: 16px; z-index: 9999;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--bgColor-accent-emphasis, #0969da);
+  color: var(--fgColor-onEmphasis, #fff);
+  font-size: 12px; font-weight: 600; line-height: 18px;
+  box-shadow: 0 4px 12px rgba(1,4,9,.18);
+  cursor: pointer;
+}
+.gff-badge:hover { filter: brightness(1.08); }
+.gff-badge:focus-visible { outline: 2px solid var(--fgColor-accent, #0969da); outline-offset: 2px; }
 
 .gff-end-marker {
   padding: 24px 16px; text-align: center;
@@ -1022,9 +1051,9 @@
     if (text != null) node.textContent = text;
     return node;
   }
-  function segControl(scope, key, current, labels) {
+  function segControl(scope, key, current, labels2) {
     const wrap = el("span", "gff-seg");
-    for (const opt of labels) {
+    for (const opt of labels2) {
       const b = el("button");
       b.type = "button";
       b.textContent = opt.label;
@@ -1251,7 +1280,7 @@
       el(
         "div",
         "gff-hint",
-        'Older cards are removed from the bottom and the "More" button is dropped.'
+        'Each card older than the threshold is hidden; cards without a visible timestamp are ignored. The "More" button is dropped when a card is hidden.'
       )
     );
     dialog.appendChild(el("h3", void 0, "Auto-load"));
@@ -1364,6 +1393,21 @@
     overlay = null;
   }
 
+  // src/ui/badge.ts
+  var BADGE_ID = "gff-badge";
+  function ensureBadge(onOpen) {
+    if (document.getElementById(BADGE_ID)) return;
+    const button = document.createElement("button");
+    button.id = BADGE_ID;
+    button.type = "button";
+    button.className = "gff-badge";
+    button.textContent = "Filter";
+    button.title = "Open GitHub Feed Filter settings";
+    button.setAttribute("aria-label", "Open GitHub Feed Filter settings");
+    button.addEventListener("click", onOpen);
+    (document.body || document.documentElement).appendChild(button);
+  }
+
   // src/main.ts
   var config = loadConfig();
   function getConfig() {
@@ -1379,6 +1423,7 @@
     });
   }
   function applyAll() {
+    ensureBadge(() => openPanel(panelCtx));
     const url = location.href;
     const feedActive = config.features.feed.enabled && matchesAny(url, config.features.feed.urls);
     const rightActive = config.features.rightColumn.enabled && matchesAny(url, config.features.rightColumn.urls);
@@ -1403,13 +1448,12 @@
     loadOrgInfo
   };
   ensureStyles();
+  ensureBadge(() => openPanel(panelCtx));
   if (typeof GM_registerMenuCommand === "function") {
-    GM_registerMenuCommand("GitHub Feed Filter \u2014 Settings", () => openPanel(panelCtx));
-    GM_registerMenuCommand("GitHub Feed Filter \u2014 Reset to defaults", () => {
-      config = cloneDefault();
-      saveConfig(config);
-      scheduleApply();
-    });
+    GM_registerMenuCommand(
+      "GitHub Feed Filter Settings",
+      () => openPanel(panelCtx)
+    );
   }
   for (const ev of ["turbo:load", "turbo:frame-load", "pjax:end"]) {
     document.addEventListener(ev, () => setTimeout(scheduleApply, 0));
