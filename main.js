@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub Feed Filter
 // @namespace    https://github.com/igugyj/github-feed-filter
-// @version      2.0.1
+// @version      2.0.2
 // @description  Filter, collapse or hide GitHub feed cards by type, block by keyword, age the feed with time cutoff and auto-load. Adds a Stargazers button on your own repositories. Fully configurable.
 // @author       Pfolg
 // @license      MIT
@@ -288,17 +288,16 @@
     );
   }
   function cardTimestamp(article) {
-    const rt = article.querySelector("relative-time[datetime]");
-    if (rt) {
-      const t = Date.parse(rt.getAttribute("datetime") || "");
-      if (!Number.isNaN(t)) return t;
-    }
-    const card = readFeedCard(article);
-    if (card && card.created_at) {
-      const t = Date.parse(card.created_at);
-      if (!Number.isNaN(t)) return t;
-    }
-    return null;
+    const ownHeader = Array.from(article.querySelectorAll("header")).find(
+      (h) => h.closest("article.js-feed-item-component") === article
+    );
+    const headerRt = ownHeader ? ownHeader.querySelector("relative-time[datetime]") : null;
+    const own = headerRt || Array.from(article.querySelectorAll("relative-time[datetime]")).find(
+      (rt) => rt.closest("article.js-feed-item-component") === article
+    );
+    if (!own) return null;
+    const t = Date.parse(own.getAttribute("datetime") || "");
+    return Number.isNaN(t) ? null : t;
   }
 
   // src/core/labels.ts
@@ -454,15 +453,12 @@
     const kw = cfg.keywords;
     const kwList = kw.enabled ? kw.list : [];
     timeCutoffHit = false;
-    let cutoffReached = false;
+    let oldCardFound = false;
     for (const el2 of topLevelCards(document)) {
       if (cutoff !== null) {
-        if (!cutoffReached) {
-          const ts = cardTimestamp(el2);
-          if (ts !== null && ts < cutoff) cutoffReached = true;
-        }
-        if (cutoffReached) {
-          timeCutoffHit = true;
+        const ts = cardTimestamp(el2);
+        if (ts !== null && ts < cutoff) {
+          oldCardFound = true;
           applyCardMode(el2, "hide", "");
           continue;
         }
@@ -479,6 +475,7 @@
       }
       applyCardMode(el2, mode, label);
     }
+    timeCutoffHit = oldCardFound;
   }
   function placeEndMarker(marker, moreForm, feedContent) {
     let parent;
@@ -891,6 +888,20 @@
 }
 .gff-collapse.gff-expanded > .gff-collapse-header::before { content: "\\25BE"; }
 
+.gff-badge {
+  position: fixed; right: 16px; bottom: 16px; z-index: 9999;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--bgColor-accent-emphasis, #0969da);
+  color: var(--fgColor-onEmphasis, #fff);
+  font-size: 12px; font-weight: 600; line-height: 18px;
+  box-shadow: 0 4px 12px rgba(1,4,9,.18);
+  cursor: pointer;
+}
+.gff-badge:hover { filter: brightness(1.08); }
+.gff-badge:focus-visible { outline: 2px solid var(--fgColor-accent, #0969da); outline-offset: 2px; }
+
 .gff-end-marker {
   padding: 24px 16px; text-align: center;
   color: var(--fgColor-muted, #656d76);
@@ -1269,7 +1280,7 @@
       el(
         "div",
         "gff-hint",
-        'Older cards are removed from the bottom and the "More" button is dropped.'
+        'Each card older than the threshold is hidden; cards without a visible timestamp are ignored. The "More" button is dropped when a card is hidden.'
       )
     );
     dialog.appendChild(el("h3", void 0, "Auto-load"));
@@ -1382,6 +1393,21 @@
     overlay = null;
   }
 
+  // src/ui/badge.ts
+  var BADGE_ID = "gff-badge";
+  function ensureBadge(onOpen) {
+    if (document.getElementById(BADGE_ID)) return;
+    const button = document.createElement("button");
+    button.id = BADGE_ID;
+    button.type = "button";
+    button.className = "gff-badge";
+    button.textContent = "Filter";
+    button.title = "Open GitHub Feed Filter settings";
+    button.setAttribute("aria-label", "Open GitHub Feed Filter settings");
+    button.addEventListener("click", onOpen);
+    (document.body || document.documentElement).appendChild(button);
+  }
+
   // src/main.ts
   var config = loadConfig();
   function getConfig() {
@@ -1397,6 +1423,7 @@
     });
   }
   function applyAll() {
+    ensureBadge(() => openPanel(panelCtx));
     const url = location.href;
     const feedActive = config.features.feed.enabled && matchesAny(url, config.features.feed.urls);
     const rightActive = config.features.rightColumn.enabled && matchesAny(url, config.features.rightColumn.urls);
@@ -1421,13 +1448,12 @@
     loadOrgInfo
   };
   ensureStyles();
+  ensureBadge(() => openPanel(panelCtx));
   if (typeof GM_registerMenuCommand === "function") {
-    GM_registerMenuCommand("GitHub Feed Filter \u2014 Settings", () => openPanel(panelCtx));
-    GM_registerMenuCommand("GitHub Feed Filter \u2014 Reset to defaults", () => {
-      config = cloneDefault();
-      saveConfig(config);
-      scheduleApply();
-    });
+    GM_registerMenuCommand(
+      "GitHub Feed Filter Settings",
+      () => openPanel(panelCtx)
+    );
   }
   for (const ev of ["turbo:load", "turbo:frame-load", "pjax:end"]) {
     document.addEventListener(ev, () => setTimeout(scheduleApply, 0));
