@@ -15,7 +15,7 @@ Automatically published build of the GitHub feed filter userscript. This branch 
 1. Install [Tampermonkey](https://www.tampermonkey.net/) (version 4.19 or newer).
 2. Open [`main.js`]({{RAW_URL}}).
 3. Because the file is named `main.js` rather than `*.user.js`, Tampermonkey does not offer its install page automatically. Create a new script in the Tampermonkey dashboard, replace its contents with the file, and save. Alternatively, download `main.js` and import it from the dashboard's Utilities tab.
-4. Open the Tampermonkey menu and choose **GitHub Feed Filter — Settings**. There is no button injected into the page.
+4. Click the **Feed Filter** badge in the bottom-right corner (or use the Tampermonkey menu) to configure the script.
 
 The script runs on `https://github.com/feed*`, `https://github.com/` and `https://github.com/*/*`. Each feature only acts on the URLs configured in the settings panel.
 

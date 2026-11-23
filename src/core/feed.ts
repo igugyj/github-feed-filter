@@ -43,17 +43,15 @@ function applyFeedCards(cfg: Config): void {
   const kwList = kw.enabled ? kw.list : [];
 
   timeCutoffHit = false;
-  let cutoffReached = false;
+  let oldCardFound = false;
 
   for (const el of topLevelCards(document)) {
-    // Time cutoff takes precedence; the feed is chronological.
+    // Evaluate every card on its own: the feed is not guaranteed to be
+    // strictly chronological, so one old card must not hide newer ones.
     if (cutoff !== null) {
-      if (!cutoffReached) {
-        const ts = cardTimestamp(el);
-        if (ts !== null && ts < cutoff) cutoffReached = true;
-      }
-      if (cutoffReached) {
-        timeCutoffHit = true;
+      const ts = cardTimestamp(el);
+      if (ts !== null && ts < cutoff) {
+        oldCardFound = true;
         applyCardMode(el, 'hide', '');
         continue;
       }
@@ -74,6 +72,8 @@ function applyFeedCards(cfg: Config): void {
 
     applyCardMode(el, mode, label);
   }
+
+  timeCutoffHit = oldCardFound;
 }
 
 // Place the end marker at the bottom of the feed: right before the

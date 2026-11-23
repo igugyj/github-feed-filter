@@ -33,10 +33,11 @@
   - Right column: `https://github.com/`
   - Stargazers: `https://github.com/*/*`
 - **Right column (Explore)**: `Universe banner` and `Changelog` can be filtered separately; **when both are set to Hide, the whole sidebar is removed as well**.
-- **Time filter** (off by default): set a threshold in days (default 3). Cards older than the threshold are no longer shown, the feed ends with a "You've reached the end of the feed" marker, and the `More` button is removed.
+- **Time filter** (off by default): set a threshold in days (default 3). Each card is checked on its own, so only cards older than the threshold are hidden even if the feed is not strictly chronological. Cards without a visible timestamp (recommendations, trending) are left untouched. When at least one card is hidden this way, the feed ends with a "You've reached the end of the feed" marker and the `More` button is removed.
 - **Auto-load** (off by default): when enabled, scrolling to the bottom of the feed automatically clicks `More` to load the next page — no manual clicks needed. Page limit defaults to 30 (enter `0` for unlimited); loading stops when the time cutoff is reached or the tab is backgrounded.
 - **Stargazers button**: on repository pages the script detects whether you are the owner or belong to the owning organization (GitHub settings are fetched once and cached for 24 hours, with a manual override list) and injects a `Stargazers` button next to the Fork button. It links to `/{owner}/{repo}/stargazers`. Disable "Only my repositories and organizations" to add the button on every repository.
-- **Live counter and reset**: the settings panel shows how many items are currently filtered, and `Reset to defaults` restores everything in one click.
+- **Live counter and reset**: the settings panel shows how many items are currently filtered, and `Reset to defaults` at the bottom of the panel restores everything in one click.
+- **Settings access**: a small **Feed Filter** badge in the bottom-right corner opens the settings panel; the Tampermonkey menu only has a `Settings` entry.
 - Changes apply immediately and are persisted (`GM_setValue`) — no page reload required.
 
 ## Installation
@@ -46,16 +47,17 @@ The latest build is published to the [`release`](https://github.com/igugyj/githu
 1. Install [Tampermonkey](https://www.tampermonkey.net/) (>= 4.19).
 2. Open [`main.js`](https://raw.githubusercontent.com/igugyj/github-feed-filter/release/main.js).
 3. Because the file is named `main.js` rather than `*.user.js`, Tampermonkey does not offer its install page automatically. Create a new script in the Tampermonkey dashboard, paste the file contents, and save. Alternatively, download `main.js` and import it from the dashboard's Utilities tab.
-4. Open the Tampermonkey menu and choose **GitHub Feed Filter — Settings** to configure the script. There is no button injected into the page itself.
+4. Click the **Feed Filter** badge in the bottom-right corner (or use the Tampermonkey menu) to configure the script.
 
 > The script runs on `https://github.com/feed*`, `https://github.com/` and `https://github.com/*/*`. Features only act on the URLs configured in the settings panel.
 
 ## Usage
 
-From the Tampermonkey menu:
+Click the **Feed Filter** badge in the bottom-right corner to open the settings panel. The Tampermonkey menu has a single entry:
 
 - **GitHub Feed Filter — Settings** — open the full-screen settings panel.
-- **GitHub Feed Filter — Reset to defaults** — restore all defaults.
+
+`Reset to defaults` lives at the bottom of the settings panel.
 
 Settings panel layout:
 

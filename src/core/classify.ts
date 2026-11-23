@@ -111,19 +111,24 @@ export function topLevelCards(root: ParentNode): Element[] {
 }
 
 /**
- * Best-effort timestamp for a card: its own relative-time, else any
- * descendant relative-time, else feed_card.created_at.
+ * Timestamp shown on the card itself. Prefer the card's own header
+ * `relative-time` so nested repository sections cannot contribute an
+ * unrelated timestamp. Cards without a visible timestamp (recommendations,
+ * trending, ...) have no reliable age, so they are ignored by the time
+ * filter instead of falling back to `feed_card.created_at`, which is often
+ * a batch/creation date.
  */
 export function cardTimestamp(article: Element): number | null {
-  const rt = article.querySelector('relative-time[datetime]');
-  if (rt) {
-    const t = Date.parse(rt.getAttribute('datetime') || '');
-    if (!Number.isNaN(t)) return t;
-  }
-  const card = readFeedCard(article);
-  if (card && card.created_at) {
-    const t = Date.parse(card.created_at);
-    if (!Number.isNaN(t)) return t;
-  }
-  return null;
+  const ownHeader = Array.from(article.querySelectorAll('header')).find(
+    h => h.closest('article.js-feed-item-component') === article
+  );
+  const headerRt = ownHeader
+    ? ownHeader.querySelector('relative-time[datetime]')
+    : null;
+  const own = headerRt || Array.from(article.querySelectorAll('relative-time[datetime]')).find(
+    rt => rt.closest('article.js-feed-item-component') === article
+  );
+  if (!own) return null;
+  const t = Date.parse(own.getAttribute('datetime') || '');
+  return Number.isNaN(t) ? null : t;
 }

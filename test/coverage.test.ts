@@ -500,10 +500,23 @@ await ok('keyword blocking overrides the category mode', () => {
 await ok('time filter hides old cards and pins the end marker at the bottom', () => {
   const cfg = defaults.cloneDefault();
   cfg.timeFilter = { enabled: true, days: 3 };
+
+  // Regression: the feed is not strictly chronological, so a 3-hour-old
+  // card placed after old cards must stay visible.
+  const container = document.querySelector('div[data-target="feed-container.content"]')!;
+  const threeHoursAgo = new Date(Date.now() - 3 * 3600000).toISOString();
+  const newer = document.createElement('article');
+  newer.className = 'js-feed-item-component';
+  newer.innerHTML =
+    `<relative-time datetime="${threeHoursAgo}"></relative-time>` +
+    '<p>frank merged pull request F</p>';
+  container.insertBefore(newer, container.querySelector('form.js-ajax-pagination'));
+
   feed.applyFeed(cfg);
 
   const cards = topCards();
   assert.equal(cards.filter(c => c.classList.contains('gff-hide')).length, 4);
+  assert.ok(!newer.classList.contains('gff-hide'), 'newer card after old ones stays visible');
   const marker = document.getElementById('gff-end-marker')!;
   assert.ok(marker);
   assert.ok(/older than 3 days/.test(marker.textContent || ''));
@@ -511,7 +524,6 @@ await ok('time filter hides old cards and pins the end marker at the bottom', ()
   assert.ok(more.classList.contains('gff-hide'));
 
   // Move the marker to the top; re-applying must reposition it.
-  const container = document.querySelector('div[data-target="feed-container.content"]')!;
   container.insertBefore(marker, container.firstChild);
   feed.applyFeed(cfg);
   const marker2 = document.getElementById('gff-end-marker')!;
@@ -525,6 +537,7 @@ await ok('time filter hides old cards and pins the end marker at the bottom', ()
   assert.equal(document.getElementById('gff-end-marker'), null);
   assert.ok(!more.classList.contains('gff-hide'));
   assert.equal(topCards().filter(c => c.classList.contains('gff-hide')).length, 0);
+  newer.remove();
 });
 
 await ok('auto-load clicks More once per page and stops at the limit', () => {
@@ -622,6 +635,36 @@ await ok('repo helpers return null outside a repository page', () => {
   assert.equal(ownership.isRepoPage(), false);
 });
 
+await ok('time filter ignores cards without a visible timestamp', () => {
+  const old = new Date(Date.now() - 10 * 86400000).toISOString();
+  const html = `<!doctype html><html><body>
+<div data-target="feed-container.content">
+  <article class="js-feed-item-component" data-hydro-view="${hydro({
+    card_type: 'REPOSITORY_RECOMMENDATION',
+    created_at: old
+  })}"><p>Recommended for you</p></article>
+  ${card('MERGED_PULL_REQUEST', 'alice merged pull request A', NEW)}
+  <form class="js-ajax-pagination"><button type="button">More</button></form>
+</div>
+</body></html>`;
+  const feedEnv = install(html, 'https://github.com/feed');
+  const cfg = defaults.cloneDefault();
+  cfg.timeFilter = { enabled: true, days: 3 };
+  feed.applyFeed(cfg);
+
+  const cards = topCards();
+  assert.equal(cards.length, 2);
+  assert.ok(!cards[0].classList.contains('gff-hide'), 'timestamp-less card stays visible');
+  assert.ok(!cards[1].classList.contains('gff-hide'), 'recent card stays visible');
+  assert.equal(document.getElementById('gff-end-marker'), null, 'no false end marker');
+  assert.ok(
+    !document.querySelector('form.js-ajax-pagination')!.classList.contains('gff-hide'),
+    'More stays visible'
+  );
+
+  feedEnv.window.close();
+});
+
 // ---- stargazers -----------------------------------------------------------
 
 await ok('initStargazers injects a single button on an own repository', async () => {
@@ -670,9 +713,9 @@ await ok('main boot registers menu commands and filters the feed', async () => {
   await import('../src/main');
   await sleep(250);
 
-  assert.equal(mainEnv.menu.length, 2);
+  // Only the Settings entry remains in the Tampermonkey menu.
+  assert.equal(mainEnv.menu.length, 1);
   assert.ok(mainEnv.menu.some(m => /Settings/.test(m.name)));
-  assert.ok(mainEnv.menu.some(m => /Reset/.test(m.name)));
   assert.ok(document.getElementById('gff-style'));
 
   const cards = topCards();
@@ -683,13 +726,22 @@ await ok('main boot registers menu commands and filters the feed', async () => {
   assert.ok(document.getElementById('gff-overlay'));
   panel.closePanel();
 
-  // Reset command restores the defaults and re-applies.
-  mainEnv.menu.find(m => /Reset/.test(m.name))!.fn();
+  // The badge opens the same overlay and is only injected once.
+  const badge = document.getElementById('gff-badge') as HTMLButtonElement;
+  assert.ok(badge);
+  assert.equal(document.querySelectorAll('#gff-badge').length, 1);
+  badge.click();
+  assert.ok(document.getElementById('gff-overlay'));
+
+  // Reset from the panel footer restores the defaults and re-applies.
+  const reset = document.getElementById('gff-reset') as HTMLButtonElement;
+  reset.click();
   const saved = JSON.parse(mainEnv.store.get('gff-config-v2')!);
   assert.equal(saved.modes.merged, 'show');
   await sleep(150);
   assert.equal(cards.filter(c => c.classList.contains('gff-hide')).length, 0);
 
+  panel.closePanel();
   mainEnv.window.close();
 });
 

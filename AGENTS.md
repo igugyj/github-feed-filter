@@ -33,9 +33,10 @@ Tests are standalone `tsx` scripts using an `ok()` helper, not a framework. Ther
 - UI copy and docs are English, no emoji.
 - Config is schema v2 at `gff-config-v2`; `gff-config-v1` is migrated on load and left in place. The org cache key is `gff-orgs-v1`.
 - Feed, right column, and Stargazers are URL-gated and independently toggleable. Defaults: `https://github.com/feed*`, `https://github.com/`, `https://github.com/*/*`.
+- The time filter uses each card's own visible `relative-time`; cards without one (recommendations, trending) are ignored instead of falling back to `created_at`, which can be a batch/creation date.
 - Keyword matching is case-insensitive substring only (no regex); keyword mode overrides the category mode.
 - Feature modules are idempotent and rerun on DOM mutations. Collapsed cards/items are wrapped by `src/core/collapse.ts`; update its header or the end marker through `setText()` to avoid MutationObserver feedback loops.
-- Settings live in a full-screen overlay opened from the Tampermonkey menu; there is no in-page settings button.
+- Settings live in a full-screen overlay opened from the bottom-right badge or the single Tampermonkey `Settings` menu command; reset stays in the panel footer.
 - The Stargazers button is only injected when `meta[name="user-login"]` exists; logged-out GitHub returns 404 for `/stargazers`.
 - `github-feed-filter.user.js`, `dist/`, `coverage/`, `.ci/`, `example`, and `r.js` are gitignored/local-only.
 
@@ -44,4 +45,4 @@ Tests are standalone `tsx` scripts using an `ok()` helper, not a framework. Ther
 - `src/main.ts` - config load, styles, menu commands, navigation listeners, MutationObserver, initial apply.
 - `src/config/` - defaults/normalization and GM/localStorage persistence.
 - `src/core/` - classification, collapse wrapper, feed filtering, right column, URL scope, keywords, ownership, stargazers.
-- `src/ui/` - injected styles and the settings overlay.
+- `src/ui/` - injected styles, the bottom-right badge, and the settings overlay.

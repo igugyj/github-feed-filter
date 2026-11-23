@@ -7,6 +7,7 @@ import { initStargazers } from './core/stargazers';
 import { loadOrgInfo } from './core/ownership';
 import { openPanel, type PanelContext } from './ui/panel';
 import { ensureStyles } from './ui/styles';
+import { ensureBadge } from "./ui/badge";
 
 let config: Config = loadConfig();
 
@@ -25,6 +26,8 @@ function scheduleApply(): void {
 }
 
 function applyAll(): void {
+  // Re-add the badge after soft navigation replaces the body.
+  ensureBadge(() => openPanel(panelCtx));
   const url = location.href;
   const feedActive =
     config.features.feed.enabled && matchesAny(url, config.features.feed.urls);
@@ -57,15 +60,13 @@ const panelCtx: PanelContext = {
 
 // Inject styles up front so filtering works before the panel is opened.
 ensureStyles();
+ensureBadge(() => openPanel(panelCtx));
 
-// Tampermonkey menu commands.
+// Tampermonkey menu command: settings only; reset lives in the panel footer.
 if (typeof GM_registerMenuCommand === 'function') {
-  GM_registerMenuCommand('GitHub Feed Filter — Settings', () => openPanel(panelCtx));
-  GM_registerMenuCommand('GitHub Feed Filter — Reset to defaults', () => {
-    config = cloneDefault();
-    saveConfig(config);
-    scheduleApply();
-  });
+  GM_registerMenuCommand("GitHub Feed Filter Settings", () =>
+    openPanel(panelCtx),
+  );
 }
 
 // React to soft navigation and DOM changes.

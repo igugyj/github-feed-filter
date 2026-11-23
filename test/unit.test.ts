@@ -156,7 +156,7 @@ ok('isTopLevelCard excludes nested articles', () => {
   assert.equal(topLevelCards(doc).length, 1);
 });
 
-ok('cardTimestamp reads relative-time then created_at', () => {
+ok('cardTimestamp reads the card own visible relative-time only', () => {
   const doc = new JSDOM('<!doctype html><html><body></body></html>').window.document;
   const a = doc.createElement('article');
   a.className = 'js-feed-item-component';
@@ -165,8 +165,36 @@ ok('cardTimestamp reads relative-time then created_at', () => {
   a.appendChild(rt);
   assert.equal(cardTimestamp(a), Date.parse('2026-11-14T20:14:04Z'));
 
+  // No visible timestamp: created_at is not used (recommendation cards use
+  // batch/creation dates that would cause false positives).
   const b = article({ card_type: 'RELEASE', created_at: '2026-11-10T00:00:00Z' }, 'x');
-  assert.equal(cardTimestamp(b), Date.parse('2026-11-10T00:00:00Z'));
+  assert.equal(cardTimestamp(b), null);
+
+  // The card's own header wins over a nested repository timestamp.
+  const headerCard = doc.createElement('article');
+  headerCard.className = 'js-feed-item-component';
+  const header = doc.createElement('header');
+  const headerRt = doc.createElement('relative-time');
+  headerRt.setAttribute('datetime', '2026-11-14T20:14:04Z');
+  header.appendChild(headerRt);
+  headerCard.appendChild(header);
+  const repo = doc.createElement('div');
+  const repoRt = doc.createElement('relative-time');
+  repoRt.setAttribute('datetime', '2026-11-01T00:00:00Z');
+  repo.appendChild(repoRt);
+  headerCard.appendChild(repo);
+  assert.equal(cardTimestamp(headerCard), Date.parse('2026-11-14T20:14:04Z'));
+
+  // A nested card's timestamp must not be attributed to the outer card.
+  const outer = doc.createElement('article');
+  outer.className = 'js-feed-item-component';
+  const inner = doc.createElement('article');
+  inner.className = 'js-feed-item-component';
+  const innerRt = doc.createElement('relative-time');
+  innerRt.setAttribute('datetime', '2026-11-01T00:00:00Z');
+  inner.appendChild(innerRt);
+  outer.appendChild(inner);
+  assert.equal(cardTimestamp(outer), null);
 
   const c = article(null, 'x');
   assert.equal(cardTimestamp(c), null);

@@ -28,6 +28,20 @@ export const CSS = `
 }
 .gff-collapse.gff-expanded > .gff-collapse-header::before { content: "\\25BE"; }
 
+.gff-badge {
+  position: fixed; right: 16px; bottom: 16px; z-index: 9999;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--bgColor-accent-emphasis, #0969da);
+  color: var(--fgColor-onEmphasis, #fff);
+  font-size: 12px; font-weight: 600; line-height: 18px;
+  box-shadow: 0 4px 12px rgba(1,4,9,.18);
+  cursor: pointer;
+}
+.gff-badge:hover { filter: brightness(1.08); }
+.gff-badge:focus-visible { outline: 2px solid var(--fgColor-accent, #0969da); outline-offset: 2px; }
+
 .gff-end-marker {
   padding: 24px 16px; text-align: center;
   color: var(--fgColor-muted, #656d76);

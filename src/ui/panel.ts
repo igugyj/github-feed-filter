@@ -307,7 +307,7 @@ function buildPanel(ctx: PanelContext): HTMLElement {
     el(
       'div',
       'gff-hint',
-      'Older cards are removed from the bottom and the "More" button is dropped.'
+      'Each card older than the threshold is hidden; cards without a visible timestamp are ignored. The "More" button is dropped when a card is hidden.'
     )
   );
 

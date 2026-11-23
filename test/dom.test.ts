@@ -65,7 +65,7 @@ function feedHtml(): string {
       card_type: 'STARRED_REPOSITORY',
       resource_relationship: '',
       created_at: '2026-11-14T20:14:04Z'
-    })}"><p>grace starred 2 repositories</p>
+    })}"><relative-time datetime="2026-11-14T20:14:04Z"></relative-time><p>grace starred 2 repositories</p>
       <article class="js-feed-item-component" data-hydro-view="${hydro({
         card_type: 'STARRED_REPOSITORY',
         resource_relationship: ''
@@ -175,11 +175,29 @@ const topCards = (w: JSDOM['window']) =>
 
 // ---- tests ----------------------------------------------------------------
 
-await ok('menu commands are registered', async () => {
+await ok('menu registers only the Settings command', async () => {
   const { menu } = await boot({ url: 'https://github.com/feed', html: feedHtml() });
-  assert.equal(menu.length, 2);
-  assert.ok(menu.some(m => /Settings/.test(m.name)));
-  assert.ok(menu.some(m => /Reset/.test(m.name)));
+  assert.equal(menu.length, 1);
+  assert.ok(/Settings/.test(menu[0].name));
+  assert.ok(!/Reset/.test(menu[0].name));
+});
+
+await ok('bottom-right badge opens settings with reset in the footer', async () => {
+  const { window: w } = await boot({ url: 'https://github.com/feed', html: feedHtml() });
+  const doc = w.document;
+  const badge = doc.getElementById('gff-badge') as HTMLButtonElement;
+  assert.ok(badge, 'badge injected');
+  assert.equal(doc.querySelectorAll('#gff-badge').length, 1);
+  assert.equal(doc.getElementById('gff-overlay'), null);
+
+  badge.click();
+  const overlay = doc.getElementById('gff-overlay');
+  assert.ok(overlay, 'badge opens the overlay');
+  const dialog = overlay!.querySelector('.gff-dialog')!;
+  const footer = dialog.lastElementChild as HTMLElement;
+  assert.ok(footer.classList.contains('gff-footer'), 'footer is the last block');
+  const reset = footer.querySelector('#gff-reset');
+  assert.ok(reset, 'reset lives in the panel footer');
 });
 
 await ok('feed feature runs on /feed', async () => {
@@ -336,6 +354,38 @@ await ok('time filter hides old cards, inserts end marker at bottom, drops More'
   assert.ok(
     !!(lastCard.compareDocumentPosition(marker2!) & w.Node.DOCUMENT_POSITION_FOLLOWING),
     'marker re-positioned to bottom'
+  );
+});
+
+await ok('time filter ignores cards without a visible timestamp', async () => {
+  const old = '2026-11-01T00:00:00Z';
+  const html = `<!doctype html><html><head>
+<meta name="user-login" content="Pfolg">
+</head><body>
+<div data-target="feed-container.content">
+  <article class="js-feed-item-component" data-hydro-view="${hydro({
+    card_type: 'REPOSITORY_RECOMMENDATION',
+    resource_relationship: '',
+    created_at: old
+  })}"><p>Recommended for you</p></article>
+  ${card('MERGED_PULL_REQUEST', '', 'alice merged pull request A', '2026-12-14T23:00:00Z')}
+  <form class="js-ajax-pagination"><button>More</button></form>
+</div>
+</body></html>`;
+  const { window: w } = await boot({
+    url: 'https://github.com/feed',
+    html,
+    config: { timeFilter: { enabled: true, days: 3 } },
+    now: Date.parse('2026-12-15T00:00:00Z')
+  });
+  const cs = topCards(w);
+  assert.equal(cs.length, 2);
+  assert.ok(!has(cs[0], 'gff-hide'), 'timestamp-less card stays visible');
+  assert.ok(!has(cs[1], 'gff-hide'), 'recent card stays visible');
+  assert.equal(w.document.getElementById('gff-end-marker'), null, 'no false end marker');
+  assert.ok(
+    !has(w.document.querySelector('form.js-ajax-pagination'), 'gff-hide'),
+    'More stays visible'
   );
 });
 
